@@ -1,6 +1,8 @@
 # Quilting
 
-Travail réalisé en binôme, par [Maxime Darrin](http://perso.ens-lyon.fr/maxime.darrin/) et [Loïc Jouans](https://loic.jouans.org) pour un cours de M1 d'informatique de [l'ENS de Lyon](https://www.ens-lyon.fr).
+**Objectif**: Implémenter l'article **Image quilting for Texture sythesis and Transfer**, de Alexei A. Efros et William T. Freeman, pour le cours [CGDI](http://www.ens-lyon.fr/DI/geometrie-computationnelle-et-images-digitales/) du M1 d'informatique de [l'ENS de Lyon](https://www.ens-lyon.fr).
+Travail réalisé en binôme, par [Maxime Darrin](http://perso.ens-lyon.fr/maxime.darrin/) et [Loïc Jouans](https://loic.jouans.org).
+
 Pour plus d'informations, de descriptions et d'explications, voir le [rapport](./report/report.pdf). Une version en ligne est disponible à https://perso.ens-lyon.fr/loic.jouans/projects/quilting.html).
 
 ## Remarques

@@ -1,0 +1,261 @@
+\documentclass{article}
+
+\usepackage[a4paper, total={6in, 8.6in}]{geometry} % Margins
+% \usepackage[parfill]{parskip} % No tab at par begin
+\usepackage[utf8]{inputenc} % Fancy ù
+
+
+\usepackage{amsmath,amssymb,amsfonts,amsthm}
+
+\usepackage{graphicx} % Svg
+\usepackage{pstricks} % Resizebox & svg
+
+\usepackage{subfig} % Multiple parallel figures
+
+\usepackage{float} % Force location of figure
+\usepackage[section]{placeins}
+\usepackage{fontspec}
+
+\title{Report}
+\author{Loïc Jouans, Maxime Darrin}
+
+\begin{document}
+ 
+\noindent
+\emph{ENS de Lyon}\\\texttt{M1IF}
+
+\vspace*{\fill}
+\begin{center}
+    {\fontspec{Bitstream Vera Serif}\Huge {Générateur de texture à base de tuiles}}\\
+    \vspace*{1.5cm}
+    \date\\
+    \vspace*{1cm}
+    \Large \texttt{Loïc Jouans, Maxime Darrin}
+\end{center}
+
+\thispagestyle{empty}
+\vspace*{\fill}
+
+
+
+\newpage
+
+
+
+\begin{figure}
+    \centering
+    \includegraphics[width=8cm]{pic/Intro.png}
+\end{figure}
+
+\section{Introduction}
+Soucieux de nous insérer dans la mode actuelle, nous avons souhaité construire des murs. Formation l'oblige, ces murs seront numériques, graphiques même. Si les ouvriers et les entreprises doivent payer chaque brique nouvellement ajoutée, chaque pouce supplémentaire de mur, ce n'est pas le cas pour nous autres, informaticiens. Nous proposons ici, en effet, de générer l'image d'un mur de taille arbitraire à partir d'un échantillon rudimentaire. 
+Dans l'ordre, nous décrivons l'algorithme, nous précisons certains choix fait lors de l'implantation, nous exhibons nos résultats, nous discuttons des limitations de cette approche, et enfin nous envisageons un ensemble d'améliorations possibles.
+
+\section{Description de l'algorithme}
+
+Nous basons notre travail sur un article d'Alexei A. Efros et William T. Freeman \cite{efros2001image}, dans lequel est décrit un algorithme simple de génération de textures à base de tuiles. L'algorithme se décrit grossièrement comme :
+
+\begin{itemize}
+    \item[1.] Recouvrir la surface à générer de tuiles de même tailles, tirées aléatoirement de la texture échantillon;
+    \item[2.] Prendre toutes ces tuiles plus larges que nécessaire pour avoir une marge se superposant avec les tuiles voisines (voir figure \ref{fig:tile});
+    \item[3.] Faire la jonction entre deux tuiles voisines en découpant dans les marges selon un chemin de poids minimal, de sorte à minimiser les aberrations lors du collage.
+\end{itemize}
+
+\begin{figure}
+    \centering
+    \scalebox{1.2}{\input{pic/tile.tex}}
+	\caption{Deux tuiles adjacentes, leur franges en pointillés, et la zone d'intersection en gris. Le chemin jaune correspond à un chemin de poids minimal sur la superposition des tuiles et des franges.\label{fig:tile}}
+\end{figure}
+
+Un point important à noter, et qui rends l'algorithme efficace, est que, dans la mesure où chaque pixel ne peut avoir que 8 voisins, et que les poids associés pendant l'étape 3. sont positifs, la recherche de plus court chemin peut être réalisée en temps linéaire en le nombre de pixels à considérer par un parcours en profondeur.
+
+Le pseudo-algorithme cache, bien sûr, de nombreux détails d'implantation, que nous discuterons principalement en section \ref{sec:tech}. Néanmoins, on peut dors et déjà relever les difficultés majeures auxquelles nous aurons à faire face.
+Pour le point 1., il faut sélectionner de "bonnes" tuiles, de sorte à ne pas avoir une tuile majoritairement bleue juxtaposée à une tuile majoritairement jaune. Nous avons besoin de discriminer les tuiles et de juger de la qualité de la juxtaposition brute (ie. sans traitement supplémentaire). Pour le point 3., il faut choisir et spécifier la méthode de pondération utilisée. 
+
+Malgré ces difficultés, l'algorithme reste intuitif et relativement simple, et promet de bonnes performances à la génération. Procédons à l'implantation.
+
+% Algorithme en trois étapes:
+% 1. Recouvrir la surface souhaitée de tuiles aléatoires de l'image d'origine, en incluant des franges "de collage"
+% % TODO Schéma
+% 2. Tracer le chemin de poids minimal sur la frange entre deux tuiles % TODO: Trouver une meilleur formualtion
+% 3. Couper et recoller les tuiles selon ce chemin
+
+%Difficultés:
+%- En 1., il fqut sélectionner de "bonnes" tuiles. Des tuiles cohérentes qui permetterons un collage minimisant les abérrations
+%- En 2., il faut spécifier la distance utilisée. 
+%- En 2., il faut aussi imposer quelle tuile prends la précédence dans le cas où plusieurs franges se superposent
+%
+
+\section{Details techinques d'implantation et choix}
+
+\label{sec:tech}
+Le code est fractionné en plusieurs classes pour favoriser sa modularité. La logique de l'application réside dans les classes \texttt{Canvas} et \texttt{Tile}. Le reste correspond majoritairement à des utilitaires de gestion de l'image écrits par nos soins. 
+
+Nous appliquons l'algorithme précédent. La première tuile est sélectionnée aléatoirement, puis les suivantes sont ajoutées dans l'ordre de rastérisation (ligne par ligne, de gauche à droite). La sélection d'une "bonne" tuile se fait vis-à-vis de celles de gauche et du haut. De même, l'étape de découpage se fait systématiquement par rapport à la tuile directement sur la gauche, \emph{puis} par rapport à la tuile supérieure. % TODO dessin ? 
+
+% TODO: Dessin
+Dans notre implantation, une \emph{tuile} est un morceau de l'échantillon initial composé du contenu à afficher et de la frange, comme nous l'avons vu sur la figure \ref{fig:tile}. Même si la gestion des franges en devient plus facile, nous ajoutons une difficulté lors du recouvrement et du découpage dans la frange : la frange d'une tuile recouvre maintenant les tuiles de gauche, du haut et du coin supérieur-gauche, comme l'illustre la figure \ref{fig:conflict}. Il faut donc donner une priorité lors des tests de superposition. 
+
+\begin{figure}
+    \centering
+    \scalebox{1.2}{\input{pic/tile_conflict.tex}}
+	\caption{Mise en valeur des zones de conflits suite à l'introduction de la nouvelle tuile (rouge). Les conflits gémérés par les franges des trois autres tuiles déjà installées (vert, bleu, gris) ne sont pas représentés, mais existent en pratique.\label{fig:conflict}}
+\end{figure}
+
+% TODO: Dessin
+Nous résolvons le problème de la sélection d'une "bonne" tuile en prenant une tuile de poids minimal sur \texttt{N} essais aléatoires. Le poids d'une tuile correspond à la distance sur la norme 2 entre l'ensemble des pixels de la frange de la nouvelle tuile et des anciennes tuiles sur lesquelles celle-ci viendrait se superposer.\texttt{N} est fixé, et vaut 35 dans la plupart de nos expérimentations. 
+Cette méthode nous démarque de l'article. Celui-ci propose de prendre une tuile dont la distance sur la frange est en dessous d'un certain seuil. L'introduction de cette notion de seuil ne permet de garantir la terminaison de l'algorithme que presque sûrement. Notre version termine toujours. 
+
+
+
+% Utilisation d'un ensemble de classes favorisant la modularité du code.
+% 
+% % TODO: Schema
+% Franges : tout autour de la tuile.
+% Pour les difficultés évoquées,
+% - On sélectionne la meilleur de X tuiles prises aléatoirement, avec comme mesure la somme des distances (norme 2) sur chaque pixel de superposition entre les tuiles
+% - Même distance que ci-dessus
+% - On  traite d'abord la frange avec la tuile sur la gauche, puis avec la tuile au dessus.
+% 
+% Choix:
+% Par rapport à l'article, nous ajoutons une étape de coupe horizontale, qui évite l'abérration des pommes. %TODO
+% L'article ne spécifie pas le mode de sélection des "bonnes" tuiles.
+
+\section{Resultats}
+
+	De par le fonctionnement de notre algorithme, si nous sommes capables de générer des textures convaincantes de petite taille à partir d'un échantillon donné, alors nous serons capables de générer des textures correctes de plus grande envergure. Nous ne représenterons donc ici que des textures de taille moyenne, en général de l'ordre de $1200\times800$ pixels. 
+
+
+\subsection{Extension de motifs distingués}
+Intéressons-nous à une texture dont les motifs sont définis par leurs contours, telle qu'une texture de grillage ou de lattes de bois. Dans ce cas, l'élement principal de la texture est le trait séparant les différents éléments. Au vu du fonctionnement de l'algorithme, l'etape de découpe devrait permettre de gérer particulièrement bien ces cas, dans la mesure où le trait représentera une forte discontinuité que le chemin minimal cherchera à éviter. 
+
+\begin{figure}%
+    \centering
+	%\adjincludegraphics[height=5cm,trim={0 0 {.5\width} 0},clip]{example-image-a}
+	\subfloat[Échantillon]{{\includegraphics[width=6cm, trim={0 0 0 4.4cm}, clip]{pic/grillage1.png} }}%
+    \qquad
+    \subfloat[Taille de tuile: 64pxl, Taille de frange: 32pxl]{{\includegraphics[width=6cm]{pic/grillage1_64_32.png} }}%
+    \caption{Génération à partir d'un échantillon distingué}%
+    \label{fig:grillage1}%
+\end{figure}
+
+\begin{figure}%
+    \centering
+	\subfloat[Échantillon]{{\includegraphics[width=6cm, trim={0 0 0 14cm}, clip]{pic/grillage3.png} }}%
+    \qquad
+    \subfloat[Taille de tuile: 120pxl, Taille de frange: 50pxl]{{\includegraphics[width=6cm]{pic/grillage3_120_50.png} }}%
+    \caption{Autre échantillon de grillage}%
+    \label{fig:grillage3}%
+\end{figure}
+%
+
+On en fait l'expérience en figures \ref{fig:grillage1} et \ref{fig:grillage3}. La génération est relativement bonne, si ce n'est les morceaux de grillages flottant au milieux des cellules. Ces erreurs sont causées par un mauvais choix de tuiles, à cause duquel même une découpe optimale ne pourrais rendre l'image réaliste.
+
+
+
+
+\subsection{Généralisation de motifs déconstruits}
+
+On constate que l'algorithme produit de bons résultats sur les échantillons à très faible granularité, comme la fourrure ou, dans le cas présent, un coup de pinceau. Ce résultat tient au fait que la taille minimale de tuile nécessaire pour capturer l'essence du motif est quasi nulle. Ainsi la texture générée en figure \ref{fig:orange}, a nécessité une taille de tuile de seulement 30 pixels de côté.
+
+\begin{figure}
+	\centering
+	\subfloat[Échantillon]{{\includegraphics[width=6cm, trim={0 0 0 4.4cm}, clip]{pic/orange_stroke.png} }}
+	\qquad
+		\subfloat[Taille de tuile: 30pxl, Taille de frange: 10pxl]{{\includegraphics[width=6cm, trim={0, 0, 0, 10.5cm}, clip]{pic/orange_stroke_30_10.png} }}
+	\caption{Génération sur un motif faiblement répétitif\label{fig:orange}}
+\end{figure}
+
+\subsection{Influence de la taille de tuile et de frange}
+
+Considérons maintenant une structure plus complexe. Nous utilisons toujours des briques, mais celles-ci sont maintenant plus bruitées. L'échantillon est représenté en figure \ref{fig:brick}.
+
+Avec de petites tuiles, comme en figure \ref{fig:brickb}, on n'arrive à capturer que la texture du fond des tuiles, ie. du bruit. Si on augmente progressivement la taille de celles-ci (figure \ref{fig:brickc} et \ref{fig:brickd}), on observe l'apparition des formes des tuiles. Pour être exact, on observe l'apparition du \emph{bord} des briques. 
+Malgré un certain nombre d'aberrations, ces figures représentent un résultat qui devient convaincant. Nous verrons en section \ref{sec:prop} des propositions pour améliorer ce résultat.
+
+% TODO: USE grillage1_64_32.png & grillage3_120_50.png
+
+% \documentclass[10pt,a4paper]{article}
+% \usepackage[demo]{graphicx}
+% \usepackage{subfig}
+% \begin{document}
+\begin{figure}%
+    \centering
+	\subfloat[Échantillong]{{\includegraphics[width=6cm, trim={0 0 0 10.5cm}, clip]{pic/dbrick_cut.png} }}%
+    \qquad
+    \subfloat[Taille de tuile: 48pxl, Taille de frange: 15pxl\label{fig:brickb}]{{\includegraphics[width=6cm]{pic/dbrick_48_15.png} }}%
+    \qquad
+    \subfloat[Taille de tuile: 72pxl, Taille de frange: 15pxl\label{fig:brickc}]{{\includegraphics[width=6cm]{pic/dbrick_72_15.png} }}%
+    \qquad
+    \subfloat[Taille de tuile: 100pxl, Taille de frange: 40pxl\label{fig:brickd}]{{\includegraphics[width=6cm]{pic/dbrick_100_40.png} }}%
+    %\qquad
+    %\subfloat[TODO]{{\includegraphics[width=5cm]{pic/dbrick_120_50.png} }}%
+    \caption{Évolution de la qualité de l'extension en fonction de la taille de tuile}%
+    \label{fig:brick}%
+\end{figure}
+% \end{document}
+
+% La taille de la tuile et de sa frange sont les seuls paramètres à réellement devoir être ajusté en fonction de la texture. Les franges doivent être suffisament grosses pour intégrer une partie significative du motif (pour avoir des collages propres), mais ne doit pas être trop gros, au risque d'impacter les performances et ajouter du bruit lors du découpage. La tuile doit être assez grosse pour pouvoir intégrer au moins un motif pour minimiser les abérrations.
+% 
+% 
+% L'algo fonctionne remarquablement bien sur les structures très ordonnées et au motif petit.
+
+\section{Limitations}
+
+Tel que décrit, l'algorithme est difficilement parallélisable. La partie de sélection des bonnes tuiles - goulot d'étranglement de l'algorithme - n'est parallélisable qu'avec des méthodes qui ne sont pas raisonnablement généralisables. Étant donné les dépendances lors de la sélection d'une "bonne" tuile, on pourrait imaginer de générer en premier la ligne centrale, puis en parallèle de générer les tuiles au-dessus de cette ligne et en dessous. Mais cette méthode nécessite de changer la logique de génération.
+
+La seconde limitation majeure que nous avons vu ci-dessus vient du choix de la taille de la tuile et de la frange. Ces paramètres vont fortement influer sur la qualité de la texture générée et doivent être choisis avec soin en fonction de l'échantillon. L'algorithme n'est donc pas applicable génériquement sur tout un ensemble de textures. 
+
+
+%Le code actuel n'est parallèlisable que pour la partie de découpage. Or le réel goulot d'étranglement a lieu sur la partie de sélection des "bonnes" tuiles, qui est peu parallèlisable.
+%Possible de paralleliser : Prendre au hasard une ligne centrale puis faire l'expansion des deux côtés en parallèle. Mais difficile à mettre en oeuvre pour un gain faible.
+%
+%Si la tuile est mal choisie, le coup de ciseau ne fera qu'apporter de nouvelles abérrations.
+
+\section{Améliorations possibles}
+
+\subsection{Performances}
+
+En matière de performance, il faudrait recoder une partie de la classe \texttt{Tuile}, notamment la fonction \texttt{get\_tile}, héritée de \texttt{Picture.cpp}, qui recopie \emph{manuellement} tous les pixels d'une sous-image avant de renvoyer une copie. Cette fonction est lourdement sollicitée lors de l'étape de sélection des "bonnes" tuiles, qui est le goulot d'étranglement du programme. Étant donné que pendant cette étape, aucune modification n'est réalisée, il aurait été souhaitable que la fonction \texttt{get\_tile} se contente de renvoyer une référence constante, et évite de recopier l'objet. 
+Nous pensons que cette amélioration pourrait, à elle seule, grandement améliorer les performances à l'exécution. La section en question représentant, après profilage, 71\% du temps total d'exécution pour la génération d'une image de $20\times10$ tuiles. 
+
+\subsection{Qualité}
+\label{sec:prop}
+
+Le but de l'étape de découpage est de limiter les aberrations. Celles-ci sont néanmoins inévitables si les tuiles juxtaposées sont mal choisies. La sélection de "bonnes" tuiles est donc le facteur majoritaire déterminant la qualité du résultat produit. Dans l'idéal, un effort important serait placé dans la recherche d'un algorithme plus efficace de sélection des "bonnes" tuiles, pour remplacer notre algorithme trop naïf.
+
+Dans un second temps, on pourrait raisonnablement imaginer une métrique plus complexe pour réaliser le découpage. Cette étape est peu coûteuse et permet de bien mettre en valeur les discontinuités des images, comme dans la figure \ref{fig:grillage3}. Une métrique prenant en compte la morphologie des éléments présents, telle que celles vues en cours, pourraient donc représenter une substantielle amélioration. 
+
+Enfin, on peut automatiser la sélection de la taille des tuiles. Lors de la sélection, le point important est de s'assurer que la tuile est suffisamment grosse pour accueillir un ou plusieurs motifs. Tout repose donc sur la période spatiale des motifs de l'image. La transformée de fourrier est l'outil privilégié pour déterminer ce type de longueur caractéristiques. Il est ainsi probable que l'on puisse déterminer automatiquement une taille correcte pour la tuile simplement à partir de la transformée de fourier de l'image. 
+
+% Choisir une métrique plus intelligente pour la sélection des tuiles et le découpage.
+% Pour la sélection, précalculer un ensemble de tuiles similaires, quitte à réduire le nombre de tuiles sélectionnable aléatoirement au début.
+% La métrique de sélection doit être rapide à calculer car il s'agit de l'opération limitatrice de l'algo.
+% La métrique de découpage peut être plus subtile et peut se permettre d'être plus coûteuse, par exemple en intégrant des élements de morphologie.
+% 
+% - Selection automatique de la taille des tuiles:
+%     . Calculer la transformée de Fourier de l'image pour en déduire la longueur caractéristique des motifs
+%     . (Filtrer les longueur parasites, telles que les recouvrement de couleur)
+%     . Assigner cette taille à la taille de tuile, et diviser par quatre pour la taille de frange. 
+% 
+
+\section{Conclusion}
+L'algorithme présenté ici est simple dans sa description. Et malgré son caractère non parallèlisable, il permet de générer une extension de texture avec une faible quantité de calcul. L'algorithme fonctionne avec très peu de paramètres, ce qui en fait un outil d'approximation de texture utilisable par le plus grand nombre. Il permet notamment de respecter les jonctions sur les motifs fortement marqués tels que les grillages ou les briques. On peut lui reprocher la naïveté de son approche, qui le rends difficilement améliorable, mais on peut tout à fait imaginer l'utiliser dans un context de génération "quick and dirty", comme par exemple lors de la prévisualisation d'une scène 3D.
+
+%C'est simple, rapide sur un single thread, peu gourmand en calcul, facilement paramètrable, ready-to-use et efficace pour les textures à motif trés fort;
+%mais peu ou pas parallèlisable, et trop naïf lorsque les motifs sont plus étendus ou complexes.
+%
+%Utilisable dans les logiciels de rendu 3D pour une texturisation rapide (et moche) lors de la visualisation. 
+
+%\begin{figure}[h]
+%    \centering
+%    \scalebox{.6}{\input{../svg/neurons.tex}}
+%    \caption{toto}
+%\end{figure}
+
+
+\bibliographystyle{plain}
+\bibliography{report}
+
+\end{document}
+
